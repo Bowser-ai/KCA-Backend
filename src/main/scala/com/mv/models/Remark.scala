@@ -19,7 +19,7 @@ final case class Remark(
 final case class RemarkWithFiliaal(
     filiaalId: Int,
     body: String
-)
+) extends AbstractRemark
 
 @jsonNoExtraFields
 final case class RemarkWithId(

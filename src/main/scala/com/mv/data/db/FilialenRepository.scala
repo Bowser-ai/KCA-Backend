@@ -7,6 +7,7 @@ import io.getquill.*
 import zio.*
 
 import java.sql.SQLException
+import java.time.LocalDateTime
 import javax.sql.DataSource
 
 trait FilialenRepository {
@@ -23,36 +24,6 @@ trait FilialenRepository {
 }
 
 object FilialenRepository {
-  private val ctx = PostgresZioJdbcContext(SnakeCase)
-
-  def getFilialen: ZIO[FilialenRepository, SQLException, List[Filiaal]] =
-    ZIO.serviceWithZIO[FilialenRepository](_.getFilialen)
-
-  def getFiliaalByNumber(
-      filiaalNumber: Int
-  ): ZIO[FilialenRepository, SQLException, Option[Filiaal]] =
-    ZIO.serviceWithZIO[FilialenRepository](_.getFiliaalByNumber(filiaalNumber))
-
-  def getRemarks: ZIO[FilialenRepository, SQLException, List[Remark]] =
-    ZIO.serviceWithZIO[FilialenRepository](_.getRemarks)
-
-  def getRemarksByFiliaal(
-      filiaalNumber: Int
-  ): ZIO[FilialenRepository, SQLException, List[Remark]] =
-    ZIO.serviceWithZIO[FilialenRepository](_.getRemarksByFiliaal(filiaalNumber))
-
-  def createRemark(
-      filiaalId: Int,
-      body: String
-  ): ZIO[FilialenRepository, SQLException, Long] =
-    ZIO.serviceWithZIO[FilialenRepository](_.createRemark(filiaalId, body))
-
-  def updateRemark(
-      id: Int,
-      body: String
-  ): ZIO[FilialenRepository, SQLException, Long] =
-    ZIO.serviceWithZIO[FilialenRepository](_.updateRemark(id, body))
-
   val live: ZLayer[DataSource, Nothing, FilialenRepository] =
     ZLayer.fromFunction((dataSource: DataSource) =>
       new FilialenRepository {
@@ -108,9 +79,39 @@ object FilialenRepository {
             querySchema[Remark](remarkTable)
               .filter(_.id == lift(id))
               .update(
-                _.body -> lift(body)
+                _.body -> lift(body),
+                _.dateModified -> lift(LocalDateTime.now)
               )
           }).provide(dsLayer)
       }
     )
+  private val ctx = PostgresZioJdbcContext(SnakeCase)
+
+  def getFilialen: ZIO[FilialenRepository, SQLException, List[Filiaal]] =
+    ZIO.serviceWithZIO[FilialenRepository](_.getFilialen)
+
+  def getFiliaalByNumber(
+      filiaalNumber: Int
+  ): ZIO[FilialenRepository, SQLException, Option[Filiaal]] =
+    ZIO.serviceWithZIO[FilialenRepository](_.getFiliaalByNumber(filiaalNumber))
+
+  def getRemarks: ZIO[FilialenRepository, SQLException, List[Remark]] =
+    ZIO.serviceWithZIO[FilialenRepository](_.getRemarks)
+
+  def getRemarksByFiliaal(
+      filiaalNumber: Int
+  ): ZIO[FilialenRepository, SQLException, List[Remark]] =
+    ZIO.serviceWithZIO[FilialenRepository](_.getRemarksByFiliaal(filiaalNumber))
+
+  def createRemark(
+      filiaalId: Int,
+      body: String
+  ): ZIO[FilialenRepository, SQLException, Long] =
+    ZIO.serviceWithZIO[FilialenRepository](_.createRemark(filiaalId, body))
+
+  def updateRemark(
+      id: Int,
+      body: String
+  ): ZIO[FilialenRepository, SQLException, Long] =
+    ZIO.serviceWithZIO[FilialenRepository](_.updateRemark(id, body))
 }
