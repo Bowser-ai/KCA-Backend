@@ -4,22 +4,29 @@ import com.mv.api.FilialenApi
 import com.mv.configuration.Configuration
 import com.mv.data.db.FilialenRepository
 import io.getquill.jdbczio.Quill.DataSource
-import zhttp.http.Middleware
-import zhttp.service.*
+import zio.http.{HttpApp, Server}
 import zio.*
 import zio.Console.printLine
 object Main extends ZIOAppDefault {
-  override def run: Task[Unit] = {
-    val ds = DataSource.fromPrefix("databaseConfig")
-    (for {
+  override def run: Task[Unit] =
+    val runningServer = for {
       conf <- ZIO.service[Configuration]
       _ <- printLine(s"Server starting on port: ${conf.port}")
+      app <- ZIO.service[HttpApp[FilialenRepository]]
       _ <- Server
-        .start(
-          conf.port,
-          FilialenApi.filialen
+        .serve(
+          app
         )
-    } yield ())
-      .provide(Configuration.live, ds, FilialenRepository.live)
-  }
+    } yield ()
+
+    runningServer.provide(
+      Configuration.live,
+      FilialenApi.live,
+      FilialenRepository.live,
+      DataSource.fromPrefix("databaseConfig"),
+      ZLayer
+        .service[Configuration]
+        .project(c => Server.defaultWithPort(c.port))
+        .flatten
+    )
 }

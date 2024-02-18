@@ -5,91 +5,107 @@ import com.mv.data.db.FilialenRepository
 import com.mv.models.*
 import com.mv.models.Filiaal.*
 import com.mv.models.Remark.*
-import zhttp.http.*
-import zhttp.http.middleware.Cors.CorsConfig
-import zio.ZIO
+import zio.http.*
+import zio.http.Header.*
+import zio.http.Middleware.{CorsConfig, cors}
 import zio.json.*
-
-import java.sql.SQLException
+import zio.{ZIO, ZLayer}
 
 private object Cors {
-  val corsMiddleWare: Middleware[
-    Configuration,
-    Nothing,
-    Request,
-    Response,
-    Request,
-    Response
-  ] =
-    Middleware.collectZIO[Request](_ =>
-      ZIO
-        .service[Configuration]
-        .map(config =>
-          Middleware.cors(
-            CorsConfig(
-              anyOrigin = false,
-              anyMethod = true,
-              allowedOrigins = _ == config.origin,
-              allowCredentials = true,
-              allowedHeaders = Some(
-                Set("content-type")
-              )
-            )
-          )
-        )
+  def corsConfig(conf: Configuration): CorsConfig =
+    CorsConfig(
+      allowedOrigin = {
+        case origin @ Origin.Value(scheme, host, Some(port))
+            if s"$scheme://$host:$port" == conf.origin =>
+          Some(AccessControlAllowOrigin.Specific(origin))
+        case _ => None
+      },
+      allowedMethods = AccessControlAllowMethods(
+        Method.PUT,
+        Method.PATCH,
+        Method.DELETE,
+        Method.GET
+      )
     )
 }
 
 object FilialenApi {
-  val filialen
-      : Http[Configuration & FilialenRepository, Throwable, Request, Response] =
-    Http.collectZIO[Request] {
-      case Method.GET -> !! / "filialen" =>
-        FilialenRepository.getFilialen.map(filialen =>
-          Response.json(filialen.toJson)
-        )
-      case Method.GET -> !! / "filialen" / number =>
-        FilialenRepository
-          .getFiliaalByNumber(number.toInt)
-          .map {
-            case None          => Response.status(Status.NotFound)
-            case Some(filiaal) => Response.json(filiaal.toJson)
-          }
-      case Method.GET -> !! / "mededelingen" =>
-        FilialenRepository.getRemarks
-          .map(remarks => Response.json(remarks.toJson))
-
-      case req @ Method.POST -> !! / "mededelingen" =>
-        req.body.asString
-          .flatMap(body => {
-            body
-              .fromJson[RemarkWithFiliaal]
-              .match
+  val live: ZLayer[Configuration, Nothing, HttpApp[FilialenRepository]] =
+    ZLayer.fromFunction((conf: Configuration) =>
+      Routes(
+        Method.GET / conf.baseApiUrl / "filialen" -> handler(
+          FilialenRepository.getFilialen
+            .map(filialen =>
+              Response.json(
+                Map(
+                  "filialen" -> filialen.map(f => f.filiaalNumber -> f).toMap
+                ).toJson
+              )
+            )
+        ),
+        Method.GET / conf.baseApiUrl / "filialen" / int("number") -> handler {
+          (number: Int, req: Request) =>
+            FilialenRepository
+              .getFiliaalByNumber(number)
+              .map {
+                case None          => Response.status(Status.NotFound)
+                case Some(filiaal) => Response.json(filiaal.toJson)
+              }
+        },
+        Method.PUT / conf.baseApiUrl / "filialen" -> handler(
+          (request: Request) =>
+            request.body.asString
+              .flatMap(body => {
+                body.fromJson[Array[Filiaal]] match
+                  case Left(error) =>
+                    ZIO.succeed(
+                      Response.text(error).status(Status.BadRequest)
+                    )
+                  case Right(filialen) =>
+                    FilialenRepository
+                      .createFilialen(filialen.toList)
+                      .as(Response.json(filialen.toJson))
+              })
+        ),
+        Method.GET / conf.baseApiUrl / "mededelingen" -> handler(
+          FilialenRepository.getRemarks
+            .map(remarks => Response.json(remarks.toJson))
+        ),
+        Method.PUT / conf.baseApiUrl / "mededelingen" -> handler(
+          (req: Request) =>
+            req.body.asString
+              .flatMap(body => {
+                body
+                  .fromJson[Remark] match
+                  case Left(error) =>
+                    ZIO.succeed(
+                      Response
+                        .text(error)
+                        .status(Status.BadRequest)
+                    )
+                  case Right(remark) =>
+                    FilialenRepository
+                      .createRemark(remark.filiaalId, sanitize(remark.body))
+                      .map(id => Response.json(id.toJson))
+              })
+        ),
+        Method.PATCH / conf.baseApiUrl / "mededelingen" -> handler(
+          (req: Request) =>
+            req.body.asString.flatMap(body =>
+              body.fromJson[Remark] match
                 case Left(error) =>
                   ZIO.succeed(
-                    Response
-                      .text(error)
-                      .setStatus(Status.BadRequest)
+                    Response.text(error).status(Status.BadRequest)
                   )
-                case Right(remark) =>
+                case Right(filiaal) =>
                   FilialenRepository
-                    .createRemark(
-                      remark.filiaalId,
-                      sanitize(remark.body)
-                    )
-                    .as(Response.ok)
-          })
-      case req @ Method.PUT -> !! / "mededelingen" =>
-        req.body.asString.flatMap(body =>
-          body.fromJson[RemarkWithId] match
-            case Left(error) =>
-              ZIO.succeed(Response.text(error).setStatus(Status.BadRequest))
-            case Right(filiaal) =>
-              FilialenRepository
-                .updateRemark(filiaal.id, sanitize(filiaal.body))
-                .as(Response.ok)
+                    .updateRemark(filiaal.id, sanitize(filiaal.body))
+                    .as(Response.status(Status.NoContent))
+            )
         )
-    } @@ Cors.corsMiddleWare
+      ).handleError(e => Response.internalServerError(s"Internal error: $e"))
+        .toHttpApp @@ cors(Cors.corsConfig(conf))
+    )
 
   private def sanitize(input: String): String =
     input.trim.replaceAll("[<>\"']", "")

@@ -1,8 +1,6 @@
 package com.mv.models
 
 import zio.json.*
-import zio.json.JsonEncoder.list
-import zio.json.internal.Write
 
 final case class Filiaal(
     filiaalNumber: Int,
@@ -13,6 +11,9 @@ final case class Filiaal(
 )
 
 object Filiaal {
-  implicit val filiaalEncoder: JsonEncoder[Filiaal] =
+  given filiaalEncoder: JsonEncoder[Filiaal] =
     DeriveJsonEncoder.gen[Filiaal]
+
+  given filiaalDecoder: JsonDecoder[Filiaal] =
+    DeriveJsonDecoder.gen[Filiaal]
 }
