@@ -1,8 +1,8 @@
 package com.mv
 
-import com.mv.api.FilialenApi
+import com.mv.api.Api
 import com.mv.configuration.Configuration
-import com.mv.data.db.FilialenRepository
+import com.mv.data.FilialenRepository
 import io.getquill.jdbczio.Quill.DataSource
 import zio.http.{HttpApp, Server}
 import zio.*
@@ -21,7 +21,7 @@ object Main extends ZIOAppDefault {
 
     runningServer.provide(
       Configuration.live,
-      FilialenApi.live,
+      Api.live,
       FilialenRepository.live,
       DataSource.fromPrefix("databaseConfig"),
       ZLayer

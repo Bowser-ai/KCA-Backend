@@ -1,4 +1,4 @@
-package com.mv.data.db
+package com.mv.data
 
 import com.mv.models.{Filiaal, Remark}
 import io.getquill.*
@@ -13,13 +13,14 @@ trait FilialenRepository {
   def getFiliaalByNumber(
       filiaalNumber: Int
   ): ZIO[Any, SQLException, Option[Filiaal]]
-
   def createFilialen(filialen: List[Filiaal]): ZIO[Any, SQLException, Unit]
+
+  def updateFiliaal(filiaal: Filiaal): ZIO[Any, SQLException, Unit]
+
   def getRemarks: ZIO[Any, SQLException, List[Remark]]
   def getRemarksByFiliaal(
       filiaalNumber: Int
   ): ZIO[Any, SQLException, List[Remark]]
-
   def getRemarkById(
       id: Int
   ): ZIO[Any, SQLException, Option[Remark]]
@@ -45,6 +46,26 @@ object FilialenRepository {
           run(query[Filiaal].filter(_.filiaalNumber == lift(number)))
             .map(_.headOption)
             .provide(dsLayer)
+
+        override def createFilialen(
+            filialen: List[Filiaal]
+        ): ZIO[Any, SQLException, Unit] =
+          run(liftQuery(filialen).foreach(query[Filiaal].insertValue(_))).unit
+            .provide(dsLayer)
+
+        override def updateFiliaal(
+            filiaal: Filiaal
+        ): ZIO[Any, SQLException, Unit] =
+          run(
+            query[Filiaal]
+              .filter(_.filiaalNumber == lift(filiaal.filiaalNumber))
+              .update(
+                _.info -> lift(filiaal.info),
+                _.tel -> lift(filiaal.tel),
+                _.address -> lift(filiaal.address),
+                _.zipcode -> lift(filiaal.zipcode)
+              )
+          ).unit.provide(dsLayer)
 
         override def getRemarks: ZIO[Any, SQLException, List[Remark]] =
           run(quote {
@@ -97,12 +118,6 @@ object FilialenRepository {
             querySchema[Remark](remarkTable)
               .filter(_.id == lift(id))
           }).map(_.headOption).provide(dsLayer)
-
-        override def createFilialen(
-            filialen: List[Filiaal]
-        ): ZIO[Any, SQLException, Unit] =
-          run(liftQuery(filialen).foreach(query[Filiaal].insertValue(_))).unit
-            .provide(dsLayer)
       }
     )
   private val ctx = PostgresZioJdbcContext(SnakeCase)
@@ -119,6 +134,11 @@ object FilialenRepository {
       filialen: List[Filiaal]
   ): ZIO[FilialenRepository, SQLException, Unit] =
     ZIO.serviceWithZIO(_.createFilialen(filialen))
+
+  def updateFiliaal(
+      filiaal: Filiaal
+  ): ZIO[FilialenRepository, SQLException, Unit] =
+    ZIO.serviceWithZIO(_.updateFiliaal(filiaal))
 
   def getRemarks: ZIO[FilialenRepository, SQLException, List[Remark]] =
     ZIO.serviceWithZIO(_.getRemarks)
