@@ -6,7 +6,8 @@ import com.mv.configuration.Configuration
 import com.mv.data.FilialenRepository
 import zio.ZLayer
 import zio.http.Middleware.cors
-import zio.http.{HttpApp, Response}
+import zio.http.{HttpApp, Response, Status}
+import com.mv.api.errors.InputDecodeError
 object Api {
   val live: ZLayer[Configuration, Nothing, HttpApp[FilialenRepository]] =
     ZLayer {
@@ -14,10 +15,11 @@ object Api {
         corsConfig <- Cors.corsConfig
         filialen <- FilialenRoutes.make
         remarks <- RemarkRoutes.make
-      } yield (filialen ++ remarks)
-        .handleError(e =>
-          Response.internalServerError(s"Internal server error: $e")
-        )
-        .toHttpApp @@ cors(corsConfig)
+      } yield (filialen ++ remarks).handleError {
+        case InputDecodeError(msg) =>
+          Response.text(msg).status(Status.BadRequest)
+        case e: Throwable =>
+          Response.internalServerError(e.getMessage)
+      }.toHttpApp @@ cors(corsConfig)
     }
 }

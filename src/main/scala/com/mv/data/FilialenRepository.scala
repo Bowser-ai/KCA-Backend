@@ -17,6 +17,8 @@ trait FilialenRepository {
 
   def updateFiliaal(filiaal: Filiaal): ZIO[Any, SQLException, Unit]
 
+  def deleteFiliaal(filiaalNumber: Int): ZIO[Any, SQLException, Long]
+
   def getRemarks: ZIO[Any, SQLException, List[Remark]]
   def getRemarksByFiliaal(
       filiaalNumber: Int
@@ -66,6 +68,13 @@ object FilialenRepository {
                 _.zipcode -> lift(filiaal.zipcode)
               )
           ).unit.provide(dsLayer)
+
+        override def deleteFiliaal(
+            filiaalNumber: Int
+        ): ZIO[Any, SQLException, Long] =
+          run(
+            query[Filiaal].filter(_.filiaalNumber == lift(filiaalNumber)).delete
+          ).provide(dsLayer)
 
         override def getRemarks: ZIO[Any, SQLException, List[Remark]] =
           run(quote {
@@ -139,6 +148,11 @@ object FilialenRepository {
       filiaal: Filiaal
   ): ZIO[FilialenRepository, SQLException, Unit] =
     ZIO.serviceWithZIO(_.updateFiliaal(filiaal))
+
+  def deleteFiliaal(
+      filiaalNumber: Int
+  ): ZIO[FilialenRepository, SQLException, Long] =
+    ZIO.serviceWithZIO(_.deleteFiliaal(filiaalNumber))
 
   def getRemarks: ZIO[FilialenRepository, SQLException, List[Remark]] =
     ZIO.serviceWithZIO(_.getRemarks)

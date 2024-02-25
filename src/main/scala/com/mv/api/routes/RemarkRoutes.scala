@@ -1,6 +1,7 @@
 package com.mv.api.routes
 
 import com.mv.api.Utils.sanitize
+import com.mv.api.errors.InputDecodeError
 import com.mv.configuration.Configuration
 import com.mv.data.FilialenRepository
 import com.mv.models.Remark
@@ -10,7 +11,10 @@ import zio.http.*
 import zio.json.{DecoderOps, EncoderOps}
 
 private[api] object RemarkRoutes {
-  def make: ZIO[Configuration, Nothing, Routes[FilialenRepository, Throwable]] =
+  def make: ZIO[Configuration, Nothing, Routes[
+    FilialenRepository,
+    Throwable
+  ]] =
     ZIO.serviceWith[Configuration](conf =>
       Routes(
         Method.GET / conf.baseApiUrl / "mededelingen" -> handler(
@@ -19,35 +23,27 @@ private[api] object RemarkRoutes {
         ),
         Method.PUT / conf.baseApiUrl / "mededelingen" -> handler(
           (req: Request) =>
-            req.body.asString
-              .flatMap(body => {
-                body
-                  .fromJson[Remark] match
-                  case Left(error) =>
-                    ZIO.succeed(
-                      Response
-                        .text(error)
-                        .status(Status.BadRequest)
-                    )
-                  case Right(remark) =>
-                    FilialenRepository
-                      .createRemark(remark.filiaalId, sanitize(remark.body))
-                      .map(id => Response.json(id.toJson))
-              })
+            for {
+              body <- req.body.asString
+              remark <- ZIO
+                .fromEither(body.fromJson[Remark])
+                .mapError(InputDecodeError.apply)
+              id <- FilialenRepository
+                .createRemark(remark.filiaalId, sanitize(remark.body))
+            } yield Response.json(id.toJson)
         ),
         Method.PATCH / conf.baseApiUrl / "mededelingen" -> handler(
           (req: Request) =>
-            req.body.asString.flatMap(body =>
-              body.fromJson[Remark] match
-                case Left(error) =>
-                  ZIO.succeed(
-                    Response.text(error).status(Status.BadRequest)
-                  )
-                case Right(filiaal) =>
-                  FilialenRepository
-                    .updateRemark(filiaal.id, sanitize(filiaal.body))
-                    .as(Response.status(Status.NoContent))
-            )
+            for {
+              body <- req.body.asString
+              remark <- ZIO
+                .fromEither(body.fromJson[Remark])
+                .mapError(InputDecodeError.apply)
+              _ <- FilialenRepository.updateRemark(
+                remark.id,
+                sanitize(remark.body)
+              )
+            } yield Response.status(Status.NoContent)
         )
       )
     )

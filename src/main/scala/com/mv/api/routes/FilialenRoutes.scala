@@ -1,5 +1,6 @@
 package com.mv.api.routes
 
+import com.mv.api.errors.InputDecodeError
 import com.mv.configuration.Configuration
 import com.mv.data.FilialenRepository
 import com.mv.models.*
@@ -38,26 +39,21 @@ private[api] object FilialenRoutes {
         },
         Method.PUT / conf.baseApiUrl / "filialen" -> handler(
           (request: Request) =>
-            request.body.asString
-              .flatMap(body => {
-                body.fromJson[Array[Filiaal]] match
-                  case Left(error) =>
-                    ZIO.succeed(
-                      Response.text(error).status(Status.BadRequest)
-                    )
-                  case Right(filialen) =>
-                    FilialenRepository
-                      .createFilialen(filialen.toList)
-                      .as(Response.json(filialen.toJson))
-              })
+            for {
+              body <- request.body.asString
+              filialen <- ZIO
+                .fromEither(body.fromJson[Array[Filiaal]])
+                .mapError(InputDecodeError.apply)
+              _ <- FilialenRepository.createFilialen(filialen.toList)
+            } yield Response.json(filialen.toJson)
         ),
         Method.PATCH / conf.baseApiUrl / "filialen" / int("id") -> handler(
           (id: Int, req: Request) =>
             req.body.asString.flatMap(body =>
-              body.fromJson[PartialFiliaal] match
-                case Left(error) =>
-                  ZIO.succeed(Response.text(error).status(Status.BadRequest))
-                case Right(partialFiliaal) =>
+              ZIO
+                .fromEither(body.fromJson[PartialFiliaal])
+                .mapError(InputDecodeError.apply)
+                .flatMap(partialFiliaal =>
                   FilialenRepository
                     .getFiliaalByNumber(id)
                     .flatMap(
@@ -70,7 +66,21 @@ private[api] object FilialenRoutes {
                         }
                       )
                     )
+                )
             )
+        ),
+        Method.DELETE / conf.baseApiUrl / "filialen" / int("id") -> handler(
+          (id: Int, req: Request) =>
+            FilialenRepository
+              .getFiliaalByNumber(id)
+              .flatMap(
+                _.map(filiaal =>
+                  FilialenRepository
+                    .deleteFiliaal(id)
+                    .as(Response.json(filiaal.toJson))
+                )
+                  .getOrElse(ZIO.succeed(Response.status(Status.NotFound)))
+              )
         )
       )
     }
