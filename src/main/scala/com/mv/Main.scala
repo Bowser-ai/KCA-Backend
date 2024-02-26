@@ -2,7 +2,7 @@ package com.mv
 
 import com.mv.api.Api
 import com.mv.configuration.Configuration
-import com.mv.data.FilialenRepository
+import com.mv.data.{FilialenRepository, RemarkRepository}
 import io.getquill.jdbczio.Quill.DataSource
 import zio.http.{HttpApp, Server}
 import zio.*
@@ -12,7 +12,7 @@ object Main extends ZIOAppDefault {
     val runningServer = for {
       conf <- ZIO.service[Configuration]
       _ <- printLine(s"Server starting on port: ${conf.port}")
-      app <- ZIO.service[HttpApp[FilialenRepository]]
+      app <- ZIO.service[HttpApp[FilialenRepository & RemarkRepository]]
       _ <- Server
         .serve(
           app
@@ -23,6 +23,7 @@ object Main extends ZIOAppDefault {
       Configuration.live,
       Api.live,
       FilialenRepository.live,
+      RemarkRepository.live,
       DataSource.fromPrefix("databaseConfig"),
       ZLayer
         .service[Configuration]

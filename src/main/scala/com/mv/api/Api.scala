@@ -1,15 +1,17 @@
 package com.mv.api
 
+import com.mv.api.errors.InputDecodeError
 import com.mv.api.middleware.Cors
 import com.mv.api.routes.{FilialenRoutes, RemarkRoutes}
 import com.mv.configuration.Configuration
-import com.mv.data.FilialenRepository
+import com.mv.data.{FilialenRepository, RemarkRepository}
 import zio.ZLayer
+import zio.http.*
 import zio.http.Middleware.cors
-import zio.http.{HttpApp, Response, Status}
-import com.mv.api.errors.InputDecodeError
 object Api {
-  val live: ZLayer[Configuration, Nothing, HttpApp[FilialenRepository]] =
+  val live: ZLayer[Configuration, Nothing, HttpApp[
+    FilialenRepository & RemarkRepository
+  ]] =
     ZLayer {
       for {
         corsConfig <- Cors.corsConfig
