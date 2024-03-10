@@ -1,15 +1,17 @@
 package com.mv.data
 
-import com.mv.models.{Filiaal, Remark}
+import com.mv.models.Filiaal
 import io.getquill.*
 import zio.*
 
 import java.sql.SQLException
-import java.time.LocalDateTime
 import javax.sql.DataSource
 
-trait FilialenRepository {
-  def getFilialen: ZIO[Any, SQLException, List[Filiaal]]
+trait FiliaalRepository {
+  def getFilialen(
+      pageSize: Int,
+      offSet: Int = 0
+  ): ZIO[Any, SQLException, List[Filiaal]]
   def getFiliaalByNumber(
       filiaalNumber: Int
   ): ZIO[Any, SQLException, Option[Filiaal]]
@@ -18,18 +20,29 @@ trait FilialenRepository {
   def updateFiliaal(filiaal: Filiaal): ZIO[Any, SQLException, Unit]
 
   def deleteFiliaal(filiaalNumber: Int): ZIO[Any, SQLException, Unit]
+
+  def getTotalCount: ZIO[Any, SQLException, Long]
 }
 
-object FilialenRepository {
-  val live: ZLayer[DataSource, Nothing, FilialenRepository] =
+object FiliaalRepository {
+  val live: ZLayer[DataSource, Nothing, FiliaalRepository] =
     ZLayer.fromFunction((dataSource: DataSource) =>
-      new FilialenRepository {
+      new FiliaalRepository {
         import ctx.*
 
         private val dsLayer = ZLayer.succeed(dataSource)
 
-        override def getFilialen: ZIO[Any, SQLException, List[Filiaal]] =
-          run(query[Filiaal]).provide(dsLayer)
+        override def getFilialen(
+            pageSize: Int,
+            offset: Int = 0
+        ): ZIO[Any, SQLException, List[Filiaal]] =
+          run(
+            query[Filiaal]
+              .sortBy(_.filiaalNumber)
+              .drop(lift(offset))
+              .take(lift(pageSize))
+          )
+            .provide(dsLayer)
 
         override def getFiliaalByNumber(
             number: Int
@@ -66,29 +79,38 @@ object FilialenRepository {
           ).unit.provide(dsLayer)
 
         private val ctx = PostgresZioJdbcContext(SnakeCase)
+
+        override def getTotalCount: ZIO[Any, SQLException, Long] =
+          run(quote { query[Filiaal].size }).provide(dsLayer)
       }
     )
 
-  def getFilialen: ZIO[FilialenRepository, SQLException, List[Filiaal]] =
-    ZIO.serviceWithZIO(_.getFilialen)
+  def getFilialen(
+      pageSize: Int,
+      offset: Int = 0
+  ): ZIO[FiliaalRepository, SQLException, List[Filiaal]] =
+    ZIO.serviceWithZIO(_.getFilialen(pageSize, offset))
 
   def getFiliaalByNumber(
       filiaalNumber: Int
-  ): ZIO[FilialenRepository, SQLException, Option[Filiaal]] =
+  ): ZIO[FiliaalRepository, SQLException, Option[Filiaal]] =
     ZIO.serviceWithZIO(_.getFiliaalByNumber(filiaalNumber))
 
   def createFilialen(
       filialen: List[Filiaal]
-  ): ZIO[FilialenRepository, SQLException, Unit] =
+  ): ZIO[FiliaalRepository, SQLException, Unit] =
     ZIO.serviceWithZIO(_.createFilialen(filialen))
 
   def updateFiliaal(
       filiaal: Filiaal
-  ): ZIO[FilialenRepository, SQLException, Unit] =
+  ): ZIO[FiliaalRepository, SQLException, Unit] =
     ZIO.serviceWithZIO(_.updateFiliaal(filiaal))
 
   def deleteFiliaal(
       filiaalNumber: Int
-  ): ZIO[FilialenRepository, SQLException, Unit] =
+  ): ZIO[FiliaalRepository, SQLException, Unit] =
     ZIO.serviceWithZIO(_.deleteFiliaal(filiaalNumber))
+
+  def getTotalCount: ZIO[FiliaalRepository, SQLException, Long] =
+    ZIO.serviceWithZIO(_.getTotalCount)
 }

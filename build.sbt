@@ -2,6 +2,10 @@ ThisBuild / scalaVersion := "3.4.0"
 ThisBuild / version := "0.1.0"
 ThisBuild / organization := "com.mv"
 
+Compile / PB.targets := Seq(
+  scalapb.gen() -> (Compile / sourceManaged).value / "scalapb"
+)
+
 lazy val root = (project in file("."))
   .settings(
     name := "Kca",

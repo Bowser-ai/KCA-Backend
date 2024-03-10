@@ -13,12 +13,6 @@ final case class Remark(
     dateModified: LocalDateTime
 )
 
-@jsonNoExtraFields
-final case class PartialRemark(
-    filiaalId: Int,
-    body: String
-)
-
 object Remark {
   given remarkEncoder: JsonEncoder[Remark] =
     DeriveJsonEncoder.gen[Remark]
@@ -26,9 +20,4 @@ object Remark {
   given remarkDecoder: JsonDecoder[Remark] =
     DeriveJsonDecoder.gen[Remark]
 
-  given partialRemarkEncoder: JsonEncoder[PartialRemark] =
-    DeriveJsonEncoder.gen[PartialRemark]
-
-  given partialRemarkDecoder: JsonDecoder[PartialRemark] =
-    DeriveJsonDecoder.gen[PartialRemark]
 }
